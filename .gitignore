@@ -1,0 +1,9 @@
+# IntelliJ 
+.idea
+*.iml
+
+# Java
+*.class
+
+# Local storage
+password_vault.txt
