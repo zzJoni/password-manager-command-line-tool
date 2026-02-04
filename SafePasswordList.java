@@ -44,6 +44,21 @@ class SafePasswordList implements Closeable {
 
     boolean isEmpty(){return head == null;}
 
+    // Method to find if a given password exists in the LL
+    // JONATHAN: CHANGE TO CHAR ARRAYS
+    public char[] retrieve(char[] name){
+        Node walker = head;
+        while (walker != null) {
+            if (walker.name.equals(name)) {
+                walker.getPassword();
+            }
+            else{
+                walker = walker.getNext();
+            }
+        }
+        return null;
+    }
+
     // Adds a node to the start of the list
     void add(char[] name, char[] username, char[] password){
         Node temp = new Node(name, username, password);

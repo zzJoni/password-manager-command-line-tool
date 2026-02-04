@@ -66,7 +66,7 @@ public class PasswordManager {
                     break;
                 case "add": add();
                     break;
-                case "get":
+                case "get": get();
                     break;
                 case "master":
                     break;
@@ -121,6 +121,14 @@ public class PasswordManager {
         password = getCharInput();
 
         passwords.append(name, username, password);
+    }
+
+    // Returns the user and the password, using the name of the password
+    private void get(){
+        System.out.println("Which password would you like to retrieve? ");
+        char[] input = getCharInput();
+
+        System.out.println(passwords.retrieve(input));
     }
 
 
