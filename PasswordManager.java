@@ -83,7 +83,7 @@ public class PasswordManager {
     private void view(){
         SafePasswordList.Node walker = passwords.getHead();
         while(walker != null){
-            printCharArrayLn(walker.getName());
+            System.out.println(walker.getName());
             walker = walker.getNext();
         }
     }
@@ -163,16 +163,5 @@ public class PasswordManager {
             System.out.println("Error: Unable to read input");
         }
         return inputtedChars;
-    }
-
-    // Prints a char array to terminal (does not append newline)
-    private void printCharArray(char[] chars){
-        for(char c : chars){
-            System.out.print(c);
-        }
-    }
-    private void printCharArrayLn(char[] chars){
-        printCharArray(chars);
-        System.out.println();
     }
 }
