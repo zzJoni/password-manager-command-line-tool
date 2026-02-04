@@ -2,6 +2,8 @@
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Scanner;
@@ -117,6 +119,7 @@ public class PasswordManager {
         }
         System.out.println("Enter a username to associate with your password");
         username = getCharInput();
+
         System.out.println("Enter what you want your password to be");
         password = getCharInput();
 
@@ -132,6 +135,18 @@ public class PasswordManager {
         inputScanner.nextLine();
 
         return input;
+    }
+    // Converts a char array to a UTF_8 byte array
+    private byte[] charsToBytes(char[] chars){
+        CharBuffer charB = CharBuffer.wrap(chars);
+        ByteBuffer byteB = StandardCharsets.UTF_8.encode(charB);
+        return  byteB.array();
+    }
+    // Converts a UTF_8 byte array to a char array
+    private char[] bytesToChars(byte[] bytes){
+        ByteBuffer byteB = ByteBuffer.wrap(bytes);
+        CharBuffer charB = StandardCharsets.UTF_8.decode(byteB);
+        return charB.array();
     }
 
     // Gets a line from user input and stores it as a char array, then clears any remaining buffer
