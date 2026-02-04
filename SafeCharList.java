@@ -58,17 +58,6 @@ class SafeCharList implements Closeable {
         }
         return chars;
     }
-    char[] toCharArrayWithoutTail(){
-        Node walker = head;
-        char[] chars = new char[size-1];
-        int count = 0;
-        while (walker != tail){
-            chars[count] = walker.getData();
-            count++;
-            walker = walker.getNext();
-        }
-        return chars;
-    }
 
     // Overwrites data so it does not remain in memory
     public void close(){

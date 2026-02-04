@@ -1,4 +1,5 @@
 // File editing
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -6,9 +7,9 @@ import java.util.Scanner;
 
 public class PasswordManager {
     // Initialize necessary classes
+    private final BufferedReader inputCharReader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
     private final Scanner inputScanner = new Scanner(System.in, StandardCharsets.UTF_8);
     private final File passwordVault = new File("password_vault.txt");
-    private final InputStreamReader inputCharReader = new InputStreamReader(System.in, StandardCharsets.UTF_8);
 
     // Stores passwords until they get reencrypted
     private final SafePasswordList passwords = new SafePasswordList();
@@ -86,21 +87,21 @@ public class PasswordManager {
             walker = walker.getNext();
         }
     }
-    // Adds a new password
+    // Adds a new password (unfinished)
     private void add(){
         System.out.println(getCharInput());
     }
 
 
     // HELPER FUNCTIONS
-    // Gets a string from the inputChar and clears the remaining buffer
+    // Gets a string from user input and clears the remaining buffer
     private String getStringInput(){
         String input = inputScanner.next();
         inputScanner.nextLine();
         return input;
     }
 
-    // Gets a char array from the inputChar and clears the remaining buffer
+    // Gets a char array from user input and clears the remaining buffer
     private char[] getCharInput(){
         char[] inputtedChars = null;
 
@@ -110,55 +111,57 @@ public class PasswordManager {
             // Variables to detect newline
             char[] lineSeparator = System.lineSeparator().toCharArray();
             boolean twoCharLineSeparator = lineSeparator.length == 2;
-            SafeCharList.Node prior = null;
-
-            // Stores whether any usable input has been entered
-            boolean validInput = false;
 
             // Loops until user enters valid input
-            while (!validInput){
+            while (charList.isEmpty()){
                 // Reads in initial characters
                 int current = inputCharReader.read();
                 // Checks if eos reached
                 if (current != -1) {
                     char currentChar = (char)current;
-                    // Checks if current char is not deliminator
-                    if (currentChar != ' '){
-                        // Resets input storage if first 2 characters are 2 char line separator
-                        if (twoCharLineSeparator
-                                && prior != null
-                                && prior.getData() == lineSeparator[0]
-                                && currentChar == lineSeparator[1]) {
-                            charList.close(); // Resets list back to empty state
-                            prior = null;
-                        }
-                        // Sets input to be valid if both chars are good
-                        else if (twoCharLineSeparator && prior != null){
-                            charList.append(currentChar);
-                            prior = prior.getNext();
-                            validInput = true;
-                        }
-                        // Appends value if it is the first and line separator is 2 chars
-                        else if (twoCharLineSeparator){
-                            charList.append(currentChar);
-                            prior = charList.getHead();
-                        }
-                        // Sets input to be valid if 1 char line separator and valid input
-                        else if (currentChar != lineSeparator[0]){
-                            charList.append(currentChar);
-                            prior = charList.getHead();
-                            validInput = true;
-                        }
+                    // Checks if current char is valid
+                    if (currentChar != ' '
+                            && currentChar != lineSeparator[0]
+                            && (!twoCharLineSeparator || currentChar != lineSeparator[1])
+                            && current >= 32 && current != 127){ // Discard standard nonprintable characters
+                        charList.append(currentChar);
                     }
                 }
             }
-
-
-
+            // Gets the rest of the text inputted by the user
+            boolean endReached = false;
+            while (!endReached){
+                // Reads the current char
+                int current = inputCharReader.read();
+                // Checks if eos reached
+                if (current != -1) {
+                    char currentChar = (char)current;
+                    // Deliminator reached
+                    if (currentChar == ' '){
+                        endReached = true;
+                    }
+                    // Line separator reached for single char line separator
+                    else if (!twoCharLineSeparator && lineSeparator[0] == currentChar){
+                        endReached = true;
+                    }
+                    // Line separator reached for two char line separator
+                    else if (twoCharLineSeparator && (lineSeparator[0] == currentChar || lineSeparator[1] == currentChar)){
+                        endReached = true;
+                    }
+                    // Stores valid input (skips non printable chars)
+                    else if(current >= 32 && current != 127){
+                        charList.append(currentChar);
+                    }
+                }
+            }
+            // Discards and remaining text
+            if (inputCharReader.ready())
+                inputCharReader.readLine();
             inputtedChars = charList.toCharArray();
         }
-        catch (Exception _){}
-
+        catch (Exception _){
+            System.out.println("Error: Unable to read input");
+        }
         return inputtedChars;
     }
 
