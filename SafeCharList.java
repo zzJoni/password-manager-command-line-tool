@@ -5,8 +5,8 @@ import java.io.Closeable;
 class SafeCharList implements Closeable {
     static class Node{
         Node(char data){this.data = data;}
-        char data;
-        Node next;
+        private char data;
+        private Node next;
 
         char getData(){return data;}
         void clearData(){data = 0;}
@@ -14,42 +14,55 @@ class SafeCharList implements Closeable {
     }
     private Node head;
     private Node tail;
-    private int length;
+    private int size = 0;
 
     // Getters
     Node getHead(){return head;}
     Node getTail(){return tail;}
 
+    boolean isEmpty(){return head == null;}
+
     // Adds a node to the start of the list
     void add(char data){
         Node temp = new Node(data);
         if (head ==  null){
-            head = temp;
             tail = temp;
         } else{
             temp.next = head;
-            head = temp;
         }
-        length++;
+        head = temp;
+        size++;
     }
     // Adds a node to the end of the list
     void append(char data){
         Node temp = new Node(data);
         if (head ==  null){
             head = temp;
-            tail = temp;
         } else{
             tail.next = temp;
-            tail = temp;
         }
-        length++;
+        tail = temp;
+        size++;
     }
+    // Deletes last node
+
     // Returns a char array constructed using the chars in the list
-    char[] getCharArray(){
+    char[] toCharArray(){
         Node walker = head;
-        char[] chars = new char[length];
+        char[] chars = new char[size];
         int count = 0;
         while (walker != null){
+            chars[count] = walker.getData();
+            count++;
+            walker = walker.getNext();
+        }
+        return chars;
+    }
+    char[] toCharArrayWithoutTail(){
+        Node walker = head;
+        char[] chars = new char[size-1];
+        int count = 0;
+        while (walker != tail){
             chars[count] = walker.getData();
             count++;
             walker = walker.getNext();
@@ -64,5 +77,6 @@ class SafeCharList implements Closeable {
             head = head.getNext();
         }
         tail = null;
+        size = 0;
     }
 }
