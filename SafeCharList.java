@@ -7,6 +7,7 @@ class SafeCharList implements Closeable {
         Node(char data){this.data = data;}
         private char data;
         private Node next;
+        private Node prev;
 
         char getData(){return data;}
         void clearData(){data = 0;}
@@ -26,25 +27,36 @@ class SafeCharList implements Closeable {
     void add(char data){
         Node temp = new Node(data);
         if (head ==  null){
+            head = temp;
             tail = temp;
         } else{
             temp.next = head;
+            head.prev = temp;
+            head = temp;
         }
-        head = temp;
         size++;
     }
     // Adds a node to the end of the list
     void append(char data){
         Node temp = new Node(data);
         if (head ==  null){
+            tail = temp;
             head = temp;
         } else{
             tail.next = temp;
+            temp.prev = tail;
+            tail = temp;
         }
-        tail = temp;
         size++;
     }
-    // Deletes last node
+    // Trims trailing whitespace
+    void trimTrailingWhitespace(){
+        while (tail.getData() == ' '){
+            tail.clearData();
+            tail = tail.prev;
+            tail.next = null;
+        }
+    }
 
     // Returns a char array constructed using the chars in the list
     char[] toCharArray(){

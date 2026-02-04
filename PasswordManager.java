@@ -3,6 +3,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Scanner;
 
 public class PasswordManager {
@@ -13,7 +14,7 @@ public class PasswordManager {
 
     // Stores passwords until they get reencrypted
     private final SafePasswordList passwords = new SafePasswordList();
-    private String masterPassword;
+    private char[] masterPassword;
 
     // Compared to first line in file to test if decryption is successful
     private final String testDecryption = "Decrypted";
@@ -36,7 +37,7 @@ public class PasswordManager {
         }
 
         System.out.println("Enter Master Password: ");
-        masterPassword = getStringInput();
+        masterPassword = getCharInput();
         System.out.print("\033[1F\033[2K"); // Erases previous line
         System.out.println("**********");
         mainLoop();
@@ -61,11 +62,9 @@ public class PasswordManager {
             String input = getStringInput();
 
             switch (input){
-                case "view":
-                    view();
+                case "view": view();
                     break;
-                case "add":
-                    add();
+                case "add": add();
                     break;
                 case "get":
                     break;
@@ -87,21 +86,56 @@ public class PasswordManager {
             walker = walker.getNext();
         }
     }
-    // Adds a new password (unfinished)
+    // Adds a new password
     private void add(){
-        System.out.println(getCharInput());
+        char[] name = null;
+        char[] username;
+        char[] password;
+
+        // Makes sure name is not already in use
+        boolean validName = false;
+        while (!validName) {
+            System.out.println("Enter a name that you can use to reference your password");
+            name = getCharInput();
+
+            // Checks if any prior passwords match with name
+            SafePasswordList.Node walker = passwords.getHead();
+            if (walker == null){
+                validName = true;
+            }
+            while (walker != null) {
+                if (Arrays.equals(name, walker.getName())){
+                    System.out.println("That name is already taken");
+                    break;
+                }
+                walker = walker.getNext();
+                // If no prior names are equal
+                if (walker == null){
+                    validName = true;
+                }
+            }
+        }
+        System.out.println("Enter a username to associate with your password");
+        username = getCharInput();
+        System.out.println("Enter what you want your password to be");
+        password = getCharInput();
+
+        passwords.append(name, username, password);
     }
 
 
     // HELPER FUNCTIONS
-    // Gets a string from user input and clears the remaining buffer
+    // Gets a single word from user input and clears the remaining buffer
     private String getStringInput(){
         String input = inputScanner.next();
+        // Discards remaining input
         inputScanner.nextLine();
+
         return input;
     }
 
-    // Gets a char array from user input and clears the remaining buffer
+    // Gets a line from user input and stores it as a char array, then clears any remaining buffer
+    // Also trims any leading or trailing whitespace
     private char[] getCharInput(){
         char[] inputtedChars = null;
 
@@ -120,7 +154,7 @@ public class PasswordManager {
                 if (current != -1) {
                     char currentChar = (char)current;
                     // Checks if current char is valid
-                    if (currentChar != ' '
+                    if ( currentChar != ' '
                             && currentChar != lineSeparator[0]
                             && (!twoCharLineSeparator || currentChar != lineSeparator[1])
                             && current >= 32 && current != 127){ // Discard standard nonprintable characters
@@ -136,16 +170,13 @@ public class PasswordManager {
                 // Checks if eos reached
                 if (current != -1) {
                     char currentChar = (char)current;
-                    // Deliminator reached
-                    if (currentChar == ' '){
+                    // First char of line separator reached
+                    if (lineSeparator[0] == currentChar){
                         endReached = true;
                     }
-                    // Line separator reached for single char line separator
-                    else if (!twoCharLineSeparator && lineSeparator[0] == currentChar){
-                        endReached = true;
-                    }
-                    // Line separator reached for two char line separator
-                    else if (twoCharLineSeparator && (lineSeparator[0] == currentChar || lineSeparator[1] == currentChar)){
+                    // Other common line separator reached
+                    // (useful when running in emulators that don't use system line separator)
+                    else if (currentChar == '\n' || currentChar == '\r'){
                         endReached = true;
                     }
                     // Stores valid input (skips non printable chars)
@@ -155,8 +186,9 @@ public class PasswordManager {
                 }
             }
             // Discards and remaining text
-            if (inputCharReader.ready())
+            while (inputCharReader.ready())
                 inputCharReader.readLine();
+            charList.trimTrailingWhitespace();
             inputtedChars = charList.toCharArray();
         }
         catch (Exception _){
