@@ -7,4 +7,5 @@ out/
 *.class
 
 # Local storage
-password_vault.txt
+password_vault.enc
+temp_password_vault.enc

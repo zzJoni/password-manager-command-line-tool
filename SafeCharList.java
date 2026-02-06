@@ -2,7 +2,7 @@ import java.io.Closeable;
 
 // This helper class is a linked list that holds chars that it
 // automatically overwrites upon close
-class SafeCharList implements Closeable {
+class SafeCharList {
     static class Node{
         Node(char data){this.data = data;}
         private char data;
@@ -72,7 +72,7 @@ class SafeCharList implements Closeable {
     }
 
     // Overwrites data so it does not remain in memory
-    public void close(){
+    public void clear(){
         while (head != null){
             head.clearData();
             head = head.getNext();
