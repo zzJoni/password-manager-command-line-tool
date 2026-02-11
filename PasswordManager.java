@@ -2,48 +2,67 @@ import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.security.auth.DestroyFailedException;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
 
-public class PasswordManager {
-    // Initialize necessary classes
-    private static final SecureRandom random = new SecureRandom();
+public class PasswordManager implements AutoCloseable{
+    // Initialize global inputs and files
     private final BufferedReader inputCharReader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
     private final Scanner inputScanner = new Scanner(System.in, StandardCharsets.UTF_8);
     private final File passwordVault = new File("password_vault.enc");
     private final File tempPasswordVault = new File("temp_password_vault.enc");
 
-    // Stores passwords until they get reencrypted
+    // Stores passwords
     private final SafePasswordList passwords = new SafePasswordList();
+    char[] masterPassword;
 
-    // Stores data necessary for creating master key
+    // Stores global variables necessary for creating the master key
     private static final int VERSION_NUMBER = 1; // Stores the version of the vault file
     private static final int SALT_SIZE = 16;
     private static final int IV_SIZE = 12;
     private static final int GCM_TAG_SIZE = 16*8; // 128 bits
     private static final int MASTER_KEY_SIZE = 32*8; // 256 bits
     private static final int KEY_GENERATOR_ITERATION_COUNT = 600_000;
-    private char[] masterPassword;
 
     // Stores cryptography related classes
+    private static final SecureRandom random = new SecureRandom();
     private SecretKeyFactory keyFactory;
     private Cipher cipher;
 
     // PROGRAM START POINT
-    public static void main(String[] args){
-        PasswordManager p = new PasswordManager();
-        p.init();
+    public static void main(String[] args) {
+        try (PasswordManager p = new PasswordManager()) {
+            p.init();
+        }
+        // Handles unrecoverable exceptions that can be thrown during execution
+        catch (AEADBadTagException _){
+            System.out.println("Incorrect password, try rerunning and check to make sure you did not make any typos");
+        } catch(NoSuchAlgorithmException | NoSuchPaddingException _){
+            System.out.println("Error: Unsupported version of java, use at least java 8? or later.");
+        } catch (VaultReadFailedException _){
+            System.out.println("Error: Unable to read from vault, try rerunning program.");
+        } catch (DecryptionFailedException _) {
+            System.out.println("Error: Decryption failed, try rerunning program.");
+        } catch (EncryptionFailedException _) {
+            System.out.println("Error: Re-encrypting passwords failed, any new passwords added will not be saved.");
+            System.out.println("Try rerunning program and then readding the new in order to save them.");
+        } catch (IOException _){
+            System.out.println("Error: unable to read master password, try rerunning program.");
+        }
     }
 
     // Sets up the password manager
-    private void init(){
+    private void init()
+            throws NoSuchAlgorithmException, NoSuchPaddingException, AEADBadTagException, IOException,
+            VaultReadFailedException, DecryptionFailedException, EncryptionFailedException{
         // Gets master password from user
         boolean vaultExists = passwordVault.exists();
         if (vaultExists) {
@@ -56,21 +75,18 @@ public class PasswordManager {
         System.out.println("**********");
 
         // Initializes cryptography related classes that can error while initializing
-        try{
-            keyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        }catch(Exception _){
-            System.out.println("Error: Unsupported version of java");
-        }
+        keyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        cipher = Cipher.getInstance("AES/GCM/NoPadding");
 
         // Decrypts vault and stores data in the passwords list
         if (vaultExists){
+            SecretKey temp = null;
+            SecretKey masterKey = null;
             try(BufferedInputStream vaultInput = new BufferedInputStream(new FileInputStream(passwordVault))){
                 // Gets version number from the vault
                 byte[] versionNumBytes = new byte[Integer.BYTES];
                 int _ = vaultInput.read(versionNumBytes);
                 int versionNumber = bytesToInt(versionNumBytes);
-                System.out.println("Version: " + versionNumber);  // Debug
 
                 // Gets the salt from the vault
                 byte[] saltSizeBytes = new byte[Integer.BYTES];
@@ -90,18 +106,16 @@ public class PasswordManager {
                 byte[] iterationCountBytes = new byte[Integer.BYTES];
                 int _ = vaultInput.read(iterationCountBytes);
                 int keyGeneratorIterationCount = bytesToInt(iterationCountBytes);
-                System.out.println("Key gen iteration count: " + keyGeneratorIterationCount);  // Debug
 
                 // Gets GCM tag size from the vault
                 byte[] gmcTagSizeBytes = new byte[Integer.BYTES];
                 int _ = vaultInput.read(gmcTagSizeBytes);
                 int gmcTagSize = bytesToInt(gmcTagSizeBytes);
-                System.out.println("GCM tag size: " + gmcTagSize);  // Debug
 
                 // Creates the decryption key
                 PBEKeySpec masterKeyPBESpec = new PBEKeySpec(masterPassword, salt, keyGeneratorIterationCount, MASTER_KEY_SIZE);
-                SecretKey temp = keyFactory.generateSecret(masterKeyPBESpec);
-                SecretKey masterKey = new SecretKeySpec(temp.getEncoded(), "AES");
+                temp = keyFactory.generateSecret(masterKeyPBESpec);
+                masterKey = new SecretKeySpec(temp.getEncoded(), "AES");
 
                 // Sets up the cipher used to encrypt data to the file
                 GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(gmcTagSize, iv);
@@ -152,22 +166,31 @@ public class PasswordManager {
                     // Adds data to the list
                     passwords.append(name, username, password);
                 }
-
             }
-            catch(AEADBadTagException _){
-                System.out.println("Incorrect master key");
+            // Reading from file failed
+            catch(IOException _){
+                throw new VaultReadFailedException();
             }
-            catch(Exception e){
-                System.out.println("Error: Unable to read from vault file");
+            // Incorrect password entered
+            catch (AEADBadTagException e){
+                throw e;
+            }
+            // Error initializing decryption related classes
+            catch (Exception _){
+                throw new DecryptionFailedException();
+            }
+            finally {
+                // Attempts to clear master password data stored in keys
+                try {
+                    if (temp != null) temp.destroy();
+                    if (masterKey != null) masterKey.destroy();
+                } catch (DestroyFailedException _){}
             }
         }
 
         // Runs the main program
         try {
             mainLoop();
-        }
-        catch(Exception _){
-            System.out.println("Error: Idk, I haven't implemented this lol");
         }
         // Reencrypts password data
         finally {
@@ -178,10 +201,14 @@ public class PasswordManager {
 
             // Creates a file to hold reencrypted data
             try {
+                if (tempPasswordVault.exists()){
+                    boolean _ = tempPasswordVault.delete();
+                }
                 boolean _ = tempPasswordVault.createNewFile();
             }
-            catch(Exception _){ // TODO: Make this propagate up call stack
-                System.out.println("Error: Creation of output vault file failed");
+            catch(IOException _){
+                // TODO: Encapsulate in function that gets exceptions handled in finally block
+                throw new EncryptionFailedException();
             }
 
             // Sends encrypted data to the file
@@ -237,19 +264,9 @@ public class PasswordManager {
                 boolean _ = passwordVault.delete();
                 boolean _ = tempPasswordVault.renameTo(passwordVault);
             }
-            catch(IOException _){
-                System.out.println("Error: Error writing to vault file");
+            catch(Exception _) {
                 boolean _ = tempPasswordVault.delete();
-            }
-            catch(Exception e){
-                System.out.println("Error: Error creating master key");
-                boolean _ = tempPasswordVault.delete();
-            }
-            // Does cleanup
-            finally {
-                inputScanner.close();
-                passwords.clear();
-                Arrays.fill(masterPassword, '0');
+                throw new EncryptionFailedException();
             }
         }
     }
@@ -267,24 +284,38 @@ public class PasswordManager {
         while(true){
             System.out.println("\nEnter the command you want to execute");
             String input = getStringInput();
-
-            switch (input){
-                case "view": view();
-                    break;
-                case "add": add();
-                    break;
-                case "get":
-                    break;
-                case "master":
-                    break;
-                case "exit":
-                    return;     // Returns if program is exited
-                default:
-                    System.out.println("Unrecognized command");
+            try {
+                switch (input) {
+                    case "view":
+                        view();
+                        break;
+                    case "add":
+                        add();
+                        break;
+                    case "get":
+                        break;
+                    case "master":
+                        break;
+                    case "exit":
+                        return;     // Returns if program is exited
+                    default:
+                        System.out.println("Unrecognized command");
+                }
+            }
+            catch (IOException _){
+                System.out.println("Error processing entered text");
             }
         }
     }
-    // TERMINAL COMMANDS
+    // Closes the class
+    public void close(){
+        inputScanner.close();
+        passwords.clear();
+        Arrays.fill(masterPassword, '0');
+    }
+
+
+    // USER FUNCTIONALITY
     // Prints the names of all passwords currently stored in the password list
     private void view(){
         SafePasswordList.Node walker = passwords.getHead();
@@ -294,7 +325,7 @@ public class PasswordManager {
         }
     }
     // Adds a new password
-    private void add(){
+    private void add() throws IOException{
         char[] name = null;
         char[] username;
         char[] password;
@@ -330,6 +361,11 @@ public class PasswordManager {
 
         passwords.append(name, username, password);
     }
+
+    // CUSTOM EXCEPTIONS
+    class VaultReadFailedException extends Exception{}
+    class DecryptionFailedException extends Exception{}
+    class EncryptionFailedException extends Exception{}
 
 
     // HELPER FUNCTIONS
@@ -367,7 +403,7 @@ public class PasswordManager {
 
     // Gets a line from user input and stores it as a char array, then clears any remaining buffer
     // Also trims any leading or trailing whitespace
-    private char[] getCharInput(){
+    private char[] getCharInput() throws IOException{
         char[] inputtedChars = null;
         SafeCharList charList = new SafeCharList();
 
@@ -416,14 +452,11 @@ public class PasswordManager {
                     }
                 }
             }
-            // Discards and remaining text
+            // Discards any remaining text
             while (inputCharReader.ready())
                 inputCharReader.readLine();
             charList.trimTrailingWhitespace();
             inputtedChars = charList.toCharArray();
-        }
-        catch (Exception _){
-            System.out.println("Error: Unable to read input");
         }
         finally {
             charList.clear();
