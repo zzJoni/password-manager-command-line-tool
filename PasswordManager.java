@@ -1,17 +1,37 @@
-import javax.crypto.*;
+// Encryption/decryption
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.SecretKey;
+import javax.crypto.Cipher;
+import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.SecureRandom;
 import javax.security.auth.DestroyFailedException;
-import java.io.*;
+import javax.crypto.AEADBadTagException;
+import javax.crypto.NoSuchPaddingException;
+import java.security.NoSuchAlgorithmException;
+
+// Input/Output
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
+import java.io.File;
+import java.util.Scanner;
+import java.io.IOException;
+
+// Byte conversions
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
+
+// Other
 import java.util.Arrays;
-import java.util.Scanner;
+
 
 public class PasswordManager implements AutoCloseable{
     // Initialize global inputs and files
@@ -34,17 +54,22 @@ public class PasswordManager implements AutoCloseable{
 
     // Stores cryptography related classes
     private static final SecureRandom random = new SecureRandom();
-    private SecretKeyFactory keyFactory;
-    private Cipher cipher;
+    private final SecretKeyFactory keyFactory;
+    private final Cipher cipher;
 
-    // PROGRAM START POINT
+    // Custom Exceptions
+    class VaultReadFailedException extends Exception{}
+    class DecryptionFailedException extends Exception{}
+    class EncryptionFailedException extends Exception{}
+
+    // RUN PROGRAM
     public static void main(String[] args) {
         try (PasswordManager p = new PasswordManager()) {
-            p.init();
+            p.runProgram();
         }
         // Handles unrecoverable exceptions that can be thrown during execution
         catch (AEADBadTagException _){
-            System.out.println("Incorrect password, try rerunning and check to make sure you did not make any typos");
+            System.out.println("Incorrect password");
         } catch(NoSuchAlgorithmException | NoSuchPaddingException _){
             System.out.println("Error: Unsupported version of java, use at least java 8? or later.");
         } catch (VaultReadFailedException _){
@@ -59,13 +84,10 @@ public class PasswordManager implements AutoCloseable{
         }
     }
 
-    // Sets up the password manager
-    private void init()
-            throws NoSuchAlgorithmException, NoSuchPaddingException, AEADBadTagException, IOException,
-            VaultReadFailedException, DecryptionFailedException, EncryptionFailedException{
+    // Initializes the password manager
+    public PasswordManager() throws NoSuchAlgorithmException, NoSuchPaddingException, IOException{
         // Gets master password from user
-        boolean vaultExists = passwordVault.exists();
-        if (vaultExists) {
+        if (passwordVault.exists()) {
             System.out.println("Enter Master Password: ");
         } else{
             System.out.println("Creating new vault: Enter the password you want to use to access the vault: ");
@@ -77,198 +99,20 @@ public class PasswordManager implements AutoCloseable{
         // Initializes cryptography related classes that can error while initializing
         keyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
         cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    }
 
+    // Runs the password manager
+    private void runProgram()
+            throws AEADBadTagException, VaultReadFailedException, DecryptionFailedException, EncryptionFailedException
+    {
         // Decrypts vault and stores data in the passwords list
-        if (vaultExists){
-            SecretKey temp = null;
-            SecretKey masterKey = null;
-            try(BufferedInputStream vaultInput = new BufferedInputStream(new FileInputStream(passwordVault))){
-                // Gets version number from the vault
-                byte[] versionNumBytes = new byte[Integer.BYTES];
-                int _ = vaultInput.read(versionNumBytes);
-                int versionNumber = bytesToInt(versionNumBytes);
-
-                // Gets the salt from the vault
-                byte[] saltSizeBytes = new byte[Integer.BYTES];
-                int _ = vaultInput.read(saltSizeBytes);
-                int saltSize = bytesToInt(saltSizeBytes);
-                byte[] salt = new byte[saltSize];
-                int _ = vaultInput.read(salt);
-
-                // Gets the iv from the vault
-                byte[] ivSizeBytes = new byte[Integer.BYTES];
-                int _ = vaultInput.read(ivSizeBytes);
-                int ivSize = bytesToInt(ivSizeBytes);
-                byte[] iv = new byte[ivSize];
-                int _ = vaultInput.read(iv);
-
-                // Gets key generator iteration count from the vault
-                byte[] iterationCountBytes = new byte[Integer.BYTES];
-                int _ = vaultInput.read(iterationCountBytes);
-                int keyGeneratorIterationCount = bytesToInt(iterationCountBytes);
-
-                // Gets GCM tag size from the vault
-                byte[] gmcTagSizeBytes = new byte[Integer.BYTES];
-                int _ = vaultInput.read(gmcTagSizeBytes);
-                int gmcTagSize = bytesToInt(gmcTagSizeBytes);
-
-                // Creates the decryption key
-                PBEKeySpec masterKeyPBESpec = new PBEKeySpec(masterPassword, salt, keyGeneratorIterationCount, MASTER_KEY_SIZE);
-                temp = keyFactory.generateSecret(masterKeyPBESpec);
-                masterKey = new SecretKeySpec(temp.getEncoded(), "AES");
-
-                // Sets up the cipher used to encrypt data to the file
-                GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(gmcTagSize, iv);
-                cipher.init(Cipher.DECRYPT_MODE, masterKey, gcmParameterSpec);
-
-                // Gets all encrypted bytes from the file
-                int encryptedDataLength = (int)passwordVault.length() - (5*Integer.BYTES) - ivSize - saltSize;
-                byte[] encryptedBytes = new byte[encryptedDataLength];
-                int _ = vaultInput.read(encryptedBytes);
-
-                // Decrypts bytes and stores them in the passwords linked list
-                byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
-                for(int i = 0; i < decryptedBytes.length;){
-
-                    // Gets name size
-                    byte[] nameSizeBytes = new byte[Integer.BYTES];
-                    for(int j = 0; j < Integer.BYTES; i++, j++){
-                        nameSizeBytes[j] = decryptedBytes[i];
-                    } int nameSize = bytesToInt(nameSizeBytes);
-                    // Gets the name
-                    byte[] nameBytes = new byte[nameSize];
-                    for(int j = 0; j < nameSize; i++, j++){
-                        nameBytes[j] = decryptedBytes[i];
-                    } char[] name = bytesToChars(nameBytes);
-
-                    // Gets username size
-                    byte[] usernameSizeBytes = new byte[Integer.BYTES];
-                    for(int j = 0; j < Integer.BYTES; i++, j++){
-                        usernameSizeBytes[j] = decryptedBytes[i];
-                    } int usernameSize = bytesToInt(usernameSizeBytes);
-                    // Gets the username
-                    byte[] usernameBytes = new byte[usernameSize];
-                    for(int j = 0; j < nameSize; i++, j++){
-                        usernameBytes[j] = decryptedBytes[i];
-                    } char[] username = bytesToChars(usernameBytes);
-
-                    // Gets password size
-                    byte[] passwordSizeBytes = new byte[Integer.BYTES];
-                    for(int j = 0; j < Integer.BYTES; i++, j++){
-                        passwordSizeBytes[j] = decryptedBytes[i];
-                    } int passwordSize = bytesToInt(passwordSizeBytes);
-                    // Gets the password
-                    byte[] passwordBytes = new byte[passwordSize];
-                    for(int j = 0; j < passwordSize; i++, j++){
-                        passwordBytes[j] = decryptedBytes[i];
-                    } char[] password = bytesToChars(passwordBytes);
-
-                    // Adds data to the list
-                    passwords.append(name, username, password);
-                }
-            }
-            // Reading from file failed
-            catch(IOException _){
-                throw new VaultReadFailedException();
-            }
-            // Incorrect password entered
-            catch (AEADBadTagException e){
-                throw e;
-            }
-            // Error initializing decryption related classes
-            catch (Exception _){
-                throw new DecryptionFailedException();
-            }
-            finally {
-                // Attempts to clear master password data stored in keys
-                try {
-                    if (temp != null) temp.destroy();
-                    if (masterKey != null) masterKey.destroy();
-                } catch (DestroyFailedException _){}
-            }
-        }
+        decryptVault();
 
         // Runs the main program
-        try {
-            mainLoop();
-        }
+        mainLoop();
+
         // Reencrypts password data
-        finally {
-            byte[] salt = new byte[SALT_SIZE];
-            byte[] iv = new byte[IV_SIZE];
-            random.nextBytes(salt);
-            random.nextBytes(iv);
-
-            // Creates a file to hold reencrypted data
-            try {
-                if (tempPasswordVault.exists()){
-                    boolean _ = tempPasswordVault.delete();
-                }
-                boolean _ = tempPasswordVault.createNewFile();
-            }
-            catch(IOException _){
-                // TODO: Encapsulate in function that gets exceptions handled in finally block
-                throw new EncryptionFailedException();
-            }
-
-            // Sends encrypted data to the file
-            try(FileOutputStream outputVault = new FileOutputStream(tempPasswordVault)){
-                // Writes salt, iv, keyGenIterationCount, and gcmTagSize to the start of the vault
-                outputVault.write(intToBytes(VERSION_NUMBER));
-                outputVault.write(intToBytes(SALT_SIZE));
-                outputVault.write(salt);
-                outputVault.write(intToBytes(IV_SIZE));
-                outputVault.write(iv);
-                outputVault.write(intToBytes(KEY_GENERATOR_ITERATION_COUNT));
-                outputVault.write(intToBytes(GCM_TAG_SIZE));
-
-                // Creates the encryption key
-                PBEKeySpec masterKeyPBESpec = new PBEKeySpec(masterPassword, salt, KEY_GENERATOR_ITERATION_COUNT, MASTER_KEY_SIZE);
-                SecretKey temp = keyFactory.generateSecret(masterKeyPBESpec);
-                SecretKey masterKey = new SecretKeySpec(temp.getEncoded(), "AES");
-
-                // Sets up the stream used to encrypt data to the file
-                GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(GCM_TAG_SIZE, iv);
-                cipher.init(Cipher.ENCRYPT_MODE, masterKey, gcmParameterSpec);
-                try (BufferedOutputStream encryptedOutput = new BufferedOutputStream(new CipherOutputStream(outputVault, cipher))){
-
-                    // Encrypts all data in the password list to the file
-                    // Formated as <int(Big Endian)><bytes(UTF-8 encoding)>
-                    SafePasswordList.Node walker = passwords.getHead();
-                    while (walker != null){
-
-                        // Writes the name to the vault
-                        byte[] nameBytes = charsToBytes(walker.getName());
-                        int nameByteLen = nameBytes.length;
-                        encryptedOutput.write(intToBytes(nameByteLen));
-                        encryptedOutput.write(nameBytes);
-
-                        // Writes the username to the vault
-                        byte[] usernameBytes = charsToBytes(walker.getUsername());
-                        int usernameByteLen = usernameBytes.length;
-                        encryptedOutput.write(intToBytes(usernameByteLen));
-                        encryptedOutput.write(usernameBytes);
-
-                        // Writes the password to the vault
-                        byte[] passwordBytes = charsToBytes(walker.getPassword());
-                        int passwordByteLen = passwordBytes.length;
-                        encryptedOutput.write(intToBytes(passwordByteLen));
-                        encryptedOutput.write(passwordBytes);
-
-                        // Increments to next password
-                        walker = walker.getNext();
-                    }
-                }
-
-                // Replaces old vault file with the newly created one
-                boolean _ = passwordVault.delete();
-                boolean _ = tempPasswordVault.renameTo(passwordVault);
-            }
-            catch(Exception _) {
-                boolean _ = tempPasswordVault.delete();
-                throw new EncryptionFailedException();
-            }
-        }
+        encryptVault();
     }
 
     // Loop that lets user select what command they want to execute
@@ -307,18 +151,20 @@ public class PasswordManager implements AutoCloseable{
             }
         }
     }
-    // Closes the class
+
+    // Closes all resources and clears any sensitive data
     public void close(){
         inputScanner.close();
         passwords.clear();
         Arrays.fill(masterPassword, '0');
     }
 
-
     // USER FUNCTIONALITY
     // Prints the names of all passwords currently stored in the password list
     private void view(){
         SafePasswordList.Node walker = passwords.getHead();
+        if (walker != null) System.out.println();
+
         while(walker != null){
             System.out.println(walker.getName());
             walker = walker.getNext();
@@ -362,11 +208,211 @@ public class PasswordManager implements AutoCloseable{
         passwords.append(name, username, password);
     }
 
-    // CUSTOM EXCEPTIONS
-    class VaultReadFailedException extends Exception{}
-    class DecryptionFailedException extends Exception{}
-    class EncryptionFailedException extends Exception{}
+    // ENCRYPTION/ DECRYPTION
+    // Decrypts the vault and reads it into passwords
+    void decryptVault() throws AEADBadTagException, DecryptionFailedException, VaultReadFailedException{
+        // Decrypts vault and stores data in the passwords list
+        if (passwordVault.exists()){
+            // Stores variables that will need to be overwritten during cleanup
+            SecretKey temp = null;
+            SecretKey masterKey = null;
+            byte[] decryptedBytes = null;
+            PBEKeySpec masterKeyPBESpec = null;
 
+            try(final BufferedInputStream vaultInput = new BufferedInputStream(new FileInputStream(passwordVault))){
+                // Creates lambda to get unencrypted numbers from the vault
+                interface Function0{
+                    int get() throws IOException;
+                } Function0 getNumber = () -> {
+                    byte[] numberBytes = new byte[Integer.BYTES];
+                    int _ = vaultInput.read(numberBytes);
+                    return bytesToInt(numberBytes);
+                };
+
+                // Gets decryption data from the vault
+                int versionNumber = getNumber.get();    // Future proofing
+                // Gets the salt from the vault
+                int saltSize = getNumber.get();
+                byte[] salt = new byte[saltSize];
+                int _ = vaultInput.read(salt);
+                // Gets the iv from the vault
+                int ivSize = getNumber.get();
+                byte[] iv = new byte[ivSize];
+                int _ = vaultInput.read(iv);
+                // Gets key generator iteration count and GMC tag size from the vault
+                int keyGeneratorIterationCount = getNumber.get();
+                int gmcTagSize = getNumber.get();
+
+                // Creates the decryption key
+                masterKeyPBESpec = new PBEKeySpec(masterPassword, salt, keyGeneratorIterationCount, MASTER_KEY_SIZE);
+                temp = keyFactory.generateSecret(masterKeyPBESpec);
+                masterKey = new SecretKeySpec(temp.getEncoded(), "AES");
+
+                // Sets up the cipher used to encrypt data to the file
+                GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(gmcTagSize, iv);
+                cipher.init(Cipher.DECRYPT_MODE, masterKey, gcmParameterSpec);
+
+                // Gets all encrypted bytes from the file
+                int encryptedDataLength = (int)passwordVault.length() - (5*Integer.BYTES) - ivSize - saltSize;
+                byte[] encryptedBytes = new byte[encryptedDataLength];
+                int _ = vaultInput.read(encryptedBytes);
+
+                // Decrypts bytes and stores them in the passwords linked list
+                decryptedBytes = cipher.doFinal(encryptedBytes);
+                for(int i = 0; i < decryptedBytes.length;){
+
+                    // Gets name size
+                    byte[] nameSizeBytes = new byte[Integer.BYTES];
+                    for(int j = 0; j < Integer.BYTES; i++, j++){
+                        nameSizeBytes[j] = decryptedBytes[i];
+                    } int nameSize = bytesToInt(nameSizeBytes);
+                    // Gets the name
+                    byte[] nameBytes = new byte[nameSize];
+                    for(int j = 0; j < nameSize; i++, j++){
+                        nameBytes[j] = decryptedBytes[i];
+                    } char[] name = bytesToChars(nameBytes);
+
+                    // Gets username size
+                    byte[] usernameSizeBytes = new byte[Integer.BYTES];
+                    for(int j = 0; j < Integer.BYTES; i++, j++){
+                        usernameSizeBytes[j] = decryptedBytes[i];
+                    } int usernameSize = bytesToInt(usernameSizeBytes);
+                    // Gets the username
+                    byte[] usernameBytes = new byte[usernameSize];
+                    for(int j = 0; j < usernameSize; i++, j++){
+                        usernameBytes[j] = decryptedBytes[i];
+                    } char[] username = bytesToChars(usernameBytes);
+
+                    // Gets password size
+                    byte[] passwordSizeBytes = new byte[Integer.BYTES];
+                    for(int j = 0; j < Integer.BYTES; i++, j++){
+                        passwordSizeBytes[j] = decryptedBytes[i];
+                    } int passwordSize = bytesToInt(passwordSizeBytes);
+                    // Gets the password
+                    byte[] passwordBytes = new byte[passwordSize];
+                    for(int j = 0; j < passwordSize; i++, j++){
+                        passwordBytes[j] = decryptedBytes[i];
+                    } char[] password = bytesToChars(passwordBytes);
+
+                    // Adds data to the list
+                    passwords.append(name, username, password);
+                }
+            }
+            // Incorrect password entered
+            catch (AEADBadTagException e){
+                throw e;
+            }
+            // Reading from file failed
+            catch(IOException _){
+                throw new VaultReadFailedException();
+            }
+            // Error initializing decryption related classes
+            catch (Exception _){
+                throw new DecryptionFailedException();
+            }
+            // Overwrites sensitive data
+            finally {
+                // Attempts to clear master password data stored in keys
+                if (masterKeyPBESpec != null) masterKeyPBESpec.clearPassword();
+                try {
+                    if (temp != null) temp.destroy();
+                    if (masterKey != null) masterKey.destroy();
+                } catch (DestroyFailedException _){}
+                // Overwrites the decrypted bytes array
+                if (decryptedBytes != null) Arrays.fill(decryptedBytes, (byte)0);
+            }
+        }
+    }
+
+    // Reencrypts the passwords
+    void encryptVault() throws EncryptionFailedException{
+        // Stores variables that will need to be cleaned up later
+        PBEKeySpec masterKeyPBESpec = null;
+        SecretKey temp = null;
+        SecretKey masterKey = null;
+
+        // Creates iv and salt
+        byte[] salt = new byte[SALT_SIZE];
+        byte[] iv = new byte[IV_SIZE];
+        random.nextBytes(salt);
+        random.nextBytes(iv);
+
+        // Creates a file to hold reencrypted data
+        try {
+            if (tempPasswordVault.exists()){
+                boolean _ = tempPasswordVault.delete();
+            }
+            boolean _ = tempPasswordVault.createNewFile();
+        }
+        catch(IOException _){
+            throw new EncryptionFailedException();
+        }
+
+        // Sends encrypted data to the file
+        try(FileOutputStream outputVault = new FileOutputStream(tempPasswordVault)){
+            // Writes salt, iv, keyGenIterationCount, and gcmTagSize to the start of the vault
+            outputVault.write(intToBytes(VERSION_NUMBER));
+            outputVault.write(intToBytes(SALT_SIZE));
+            outputVault.write(salt);
+            outputVault.write(intToBytes(IV_SIZE));
+            outputVault.write(iv);
+            outputVault.write(intToBytes(KEY_GENERATOR_ITERATION_COUNT));
+            outputVault.write(intToBytes(GCM_TAG_SIZE));
+
+            // Creates the encryption key
+            masterKeyPBESpec = new PBEKeySpec(masterPassword, salt, KEY_GENERATOR_ITERATION_COUNT, MASTER_KEY_SIZE);
+            temp = keyFactory.generateSecret(masterKeyPBESpec);
+            masterKey = new SecretKeySpec(temp.getEncoded(), "AES");
+
+            // Sets up the stream used to encrypt data to the file
+            GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(GCM_TAG_SIZE, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, masterKey, gcmParameterSpec);
+            try (BufferedOutputStream encryptedOutput = new BufferedOutputStream(new CipherOutputStream(outputVault, cipher))){
+
+                // Encrypts all data in the password list to the file
+                // Formated as <int(Big Endian)><bytes(UTF-8 encoding)>
+                SafePasswordList.Node walker = passwords.getHead();
+                while (walker != null){
+
+                    // Writes the name to the vault
+                    byte[] nameBytes = charsToBytes(walker.getName());
+                    int nameByteLen = nameBytes.length;
+                    encryptedOutput.write(intToBytes(nameByteLen));
+                    encryptedOutput.write(nameBytes);
+
+                    // Writes the username to the vault
+                    byte[] usernameBytes = charsToBytes(walker.getUsername());
+                    int usernameByteLen = usernameBytes.length;
+                    encryptedOutput.write(intToBytes(usernameByteLen));
+                    encryptedOutput.write(usernameBytes);
+
+                    // Writes the password to the vault
+                    byte[] passwordBytes = charsToBytes(walker.getPassword());
+                    int passwordByteLen = passwordBytes.length;
+                    encryptedOutput.write(intToBytes(passwordByteLen));
+                    encryptedOutput.write(passwordBytes);
+
+                    // Increments to next password
+                    walker = walker.getNext();
+                }
+            }
+            // Replaces old vault file with the newly created one
+            boolean _ = passwordVault.delete();
+            boolean _ = tempPasswordVault.renameTo(passwordVault);
+        }
+        catch(Exception _) {
+            boolean _ = tempPasswordVault.delete();
+            throw new EncryptionFailedException();
+        }
+        finally {
+            // Attempts to clear master password data stored in keys
+            if (masterKeyPBESpec != null) masterKeyPBESpec.clearPassword();
+            try {
+                if (temp != null) temp.destroy();
+                if (masterKey != null) masterKey.destroy();
+            } catch (DestroyFailedException _){}
+        }
+    }
 
     // HELPER FUNCTIONS
     // Gets a single word from user input and clears the remaining buffer
@@ -404,7 +450,7 @@ public class PasswordManager implements AutoCloseable{
     // Gets a line from user input and stores it as a char array, then clears any remaining buffer
     // Also trims any leading or trailing whitespace
     private char[] getCharInput() throws IOException{
-        char[] inputtedChars = null;
+        char[] inputtedChars;
         SafeCharList charList = new SafeCharList();
 
         // Reads from the input char by char
