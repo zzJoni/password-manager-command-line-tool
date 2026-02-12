@@ -5,7 +5,7 @@ It uses AES-256-GCM encryption to store passwords with a 12 byte iv,
 and uses PBKDF2 with HMAC-SHA256 in order to convert the master password plus a 16 byte salt value into a key. 
 While I have designed this password manager to be secure to the best of my ability, 
 this repo was primarily created as a project for a college class, 
-and so I would recommend that anyone interested in using it review the code in order to 
+so I would recommend that anyone interested in using it review the code in order to 
 make sure that it is up to their standards of security. 
 
 ## Setup
