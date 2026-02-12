@@ -11,11 +11,11 @@ make sure that it is up to their standards of security.
 ## Setup
 
 In order to start using this repo, first ensure that you have version 8 or later of the Java JDK installed on your device.
-Then download PasswordManager.Java, SafePasswordList.java, and SafeCharList.java into an empty directory on your device.
+Then download PasswordManager.java, SafePasswordList.java, and SafeCharList.java into an empty directory on your device.
 After this, use your desired command line application to navigate into the directory containing the downloaded files and 
 run the following command to compile the password manager:
 ```
-javac -d out PasswordManager.Java SafePasswordList.java SafeCharList.java
+javac -d out PasswordManager.java SafePasswordList.java SafeCharList.java
 ```
 Once the password manager is compiled, you can run it from the directory you placed it in via:
 ```
