@@ -3,7 +3,7 @@ import java.util.Arrays;
 
 // This helper class is a linked list that holds decrypted data that it
 // automatically overwrites upon close
-class SafePasswordList implements Closeable {
+class SafePasswordList {
     static class Node{
         Node(char[] name, char[] username, char[] password){
             this.name = name;
@@ -65,7 +65,7 @@ class SafePasswordList implements Closeable {
         tail = temp;
     }
     // Overwrites data so it does not remain in memory
-    public void close(){
+    public void clear(){
         while (head != null){
             Arrays.fill(head.getName(), '0');
             Arrays.fill(head.getUsername(), '0');
