@@ -10,7 +10,7 @@ make sure that it is up to their standards of security.
 
 ## Setup
 
-In order to start using this repo, first ensure that your have version 8 or later of the Java JDK installed on your device.
+In order to start using this repo, first ensure that you have version 8 or later of the Java JDK installed on your device.
 Then download PasswordManager.Java, SafePasswordList.java, and SafeCharList.java into an empty directory on your device.
 After this, use your desired command line application to navigate into the directory containing the downloaded files and 
 run the following command to compile the password manager:
@@ -26,11 +26,11 @@ java -cp out PasswordManager
 
 In order to use the password manager, first run it using the command specified in the above section. 
 If this is the first time you ran the password manager or if you do not have password\_vault.enc file in your current directory,
-you will be prompted to create a new master password which will be what you use to access any passwords you store in the password manager.
+you will be prompted to create a new master password which is what you will use to access any passwords that you store in the password manager.
 If you already ran the password manager and have a password\_vault.enc file in your current directory, 
 you will instead be prompted to enter the master password that you created previously.
 
-Once you use your password to enter into the password manager, you will be presented with several different function:
+Once you use your password to enter into the password manager, you will be presented with several different functions:
 1. `add` prompts you to enter a password name \(what you reference the password by\), username, and password value,
 and adds this to your saved passwords
 2. `view` displays a list of the names of all your passwords
