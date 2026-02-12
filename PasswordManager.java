@@ -120,8 +120,8 @@ public class PasswordManager implements AutoCloseable{
         System.out.println("\n\nType one of the following commands in order to proceed:\n");
         System.out.println("   view: displays the names of all password");
         System.out.println("   add: adds a new password");
-        System.out.println("   get: retrieves one of the passwords");
-        System.out.println("   master: changes the master password");
+        System.out.println("   get: retrieves one of the passwords (WIP)");
+        System.out.println("   master: changes the master password (WIP)");
         System.out.println("   exit: exits the password manager");
 
         // Allows the user to enter commands
