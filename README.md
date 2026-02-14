@@ -37,5 +37,5 @@ and adds this to your saved passwords
 3. `get` \(WIP\)
 4. `master` \(WIP\)
 5. `exit` saves all newly entered passwords to the database and then exits the password manager. 
-This is the proper way to close the program and ensures that any sensitive password data is safely encrypted and then deleted. 
+This is the proper way to close the program and ensures that any newly added passwords are saved to the database and that any sensative encryption/decrytion related data stored in memory is overwriten. 
 
